@@ -1,0 +1,1 @@
+# Reads data from glowMarkt API and injects into influxDB
