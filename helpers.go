@@ -97,7 +97,7 @@ func getEnvVar(strIn string) string {
 	if strRet == "" {
 		log.Fatal("Missing environment variable ", strIn)
 	}
-	// fmt.Printf("%s = %s\n", strIn, strRet)
+	fmt.Printf("%s = %s\n", strIn, strRet)
 	return strRet
 }
 
@@ -108,10 +108,12 @@ func ConvertTime(timeIn int64) time.Time {
 }
 
 // Sets up all the required environment variables
-func setRequiredEnviornmentVariables() {
+func setRequiredEnvironmentVariables() {
 	// Pull glow username and password from environment variables
 	glowUsername = getEnvVar("glowUsername")
 	glowPassword = getEnvVar("glowPassword")
 	influxDbToken = getEnvVar("influxDbToken")
 	influxDbUrl = getEnvVar("influxDbUrl")
+	influxDbOrg = getEnvVar("influxDbOrg")
+	influxDbBucket = getEnvVar("influxDbBucket")
 }

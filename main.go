@@ -8,10 +8,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
 
@@ -27,6 +26,8 @@ var electricityConsumptionId string // Id returned from the Virtual Entities API
 var electricityCostId string        // Id returned from the Virtual Entities API for electricity Cost
 var influxDbToken string            // token to communicate with InfluxDb
 var influxDbUrl string              // URL for InfluxDB
+var influxDbOrg string              // InfluxDb organisation
+var influxDbBucket string           // InfluxDb bucket
 var glowUsername string             // Username for the Glow App
 var glowPassword string             // Password for the Glow App
 var catchupRequired bool            // Do we need to send a catchup to the API
@@ -37,12 +38,33 @@ const authUrl = baseUrl + "auth"
 const resourceUrl = baseUrl + "resource/"
 const applicationId = "b0f1b774-a586-4f72-9edd-27ead8aa7a8d"
 
+func pullTodaysReadings() {
+	// Grab the current time to nearest 30 minutes of data that will be available
+	timeTo := getTimeToNearest30()
+
+	// Grab todays date range
+	dateStart := time.Now().Format("2006-01-02") + "T00:00:00"
+	dateEnd := time.Now().Format("2006-01-02") + timeTo
+
+	// Yesterdays date range
+	yesterdayDateStart := time.Now().AddDate(0, 0, -1).Format("2006-01-02") + "T00:00:00"
+	yesterdayDateEnd := time.Now().AddDate(0, 0, -1).Format("2006-01-02") + "T23:59:59"
+
+	fmt.Println("dateStart: ", dateStart)
+	fmt.Println("dateEnd: ", dateEnd)
+	fmt.Println("yesterdayDateStart: ", yesterdayDateStart)
+	fmt.Println("yesterdayDateEnd: ", yesterdayDateEnd)
+
+	getMeterReadings(electricityConsumptionId, "PT30M&function=sum&from="+dateStart+"&to="+dateEnd, "Electricity", catchupRequired)
+	getMeterReadings(gasConsumptionId, "PT30M&function=sum&from="+dateStart+"&to="+dateEnd, "Gas", catchupRequired)
+
+}
+
 func main() {
+	// Populate all the required
+	setRequiredEnvironmentVariables()
 
-	setRequiredEnviornmentVariables()
-
-	// Get Token from Environment variable
-	token = os.Getenv("glowToken")
+	// Grab token if required
 	if token == "" {
 		tokenStruct, err := getToken()
 		if err != nil {
@@ -51,15 +73,32 @@ func main() {
 		token = tokenStruct.Token
 		tokenExpiry = tokenStruct.Exp
 
-		os.Setenv("glowToken", token)
-		os.Setenv("glowTokenExpiry", strconv.Itoa(int(tokenExpiry)))
-
 		fmt.Println("token: ", token)
 		fmt.Println("tokenExpiry: ", tokenExpiry)
 	}
 
 	// populate the virtual entities
 	getVirtualEntities()
+
+	// Setup a func to run every 3 minutes
+	go func() {
+		c := time.Tick(3 * time.Minute)
+		for range c {
+			// Note this purposfully runs the function
+			// in the same goroutine so we make sure there is
+			// only ever one. If it might take a long time and
+			// it's safe to have several running just add "go" here.
+			pullTodaysReadings()
+		}
+	}()
+
+	// Setup Gin Routes
+	r := gin.Default()
+
+	r.POST("/catchup", postCatchup)
+	r.GET("/catchup", getCatchup)
+
+	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 
 	// Grab the current time to nearest 30 minutes of data that will be available
 	timeTo := getTimeToNearest30()
@@ -91,16 +130,18 @@ func main() {
 }
 
 func (r *vEConsumptionDataSlice) UnmarshalJSON(b []byte) error {
-	var values []float64
-	if err := json.Unmarshal(b, &values); err != nil {
+
+	var vals []float64
+	if err := json.Unmarshal(b, &vals); err != nil {
 		return err
 	}
-	if len(values) != 2 {
-		return fmt.Errorf("expected exactly to array elements in '%s'", string(b))
+
+	if len(vals) != 2 {
+		return fmt.Errorf("Expected two values in '%s' but got %s", string(b), string(len(vals)))
 	}
 
-	r.Timestamp = time.Unix(int64(values[0]), 0)
-	r.Kwh = values[1]
+	r.Timestamp = time.Unix(int64(vals[0]), 0)
+	r.Kwh = vals[1]
 
 	return nil
 }
@@ -111,7 +152,7 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 	if catchup == true {
 		sendCatchup(resourceId)
 	}
-	// sendCatchup(resourceId)
+
 	fmt.Println("Executing GET to ", resourceUrl+resourceId+"/readings?period="+period)
 	client := &http.Client{
 		Timeout: time.Second * 10,
@@ -156,28 +197,6 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 		defer influxClient.Close()
 
 		for k := range veConsumptionDetails.Data {
-			// // Convert to GMT for friendly log stamp
-			// d := ConvertTime(int64(veConsumptionDetails.Data[k][0]))
-
-			// // Convert to unixNanotime for influxDB
-			// unixNanoTime := time.Unix(int64(veConsumptionDetails.Data[k][0]), 0).UnixNano()
-
-			// fmt.Printf("Time %s Kw Useage %g \n", d, veConsumptionDetails.Data[k][1])
-			// totalKw += veConsumptionDetails.Data[k][1]
-
-			// // get non-blocking write client
-			// writeAPI := influxClient.WriteAPI("Greenlands", "glowAPI")
-
-			// // write line protocol
-			// lineProtocol := "Reading,meter=" + endpoint + " kwh=" + fmt.Sprint(veConsumptionDetails.Data[k][1]) + " " + fmt.Sprint(unixNanoTime)
-			// fmt.Println("lineProtocol: ", lineProtocol)
-			// // fmt.Println(lineProtocol)
-			// writeAPI.WriteRecord(lineProtocol)
-			// // Flush writes
-			// writeAPI.Flush()
-
-			// Convert to GMT for friendly log stamp
-			// d := ConvertTime(int64(veConsumptionDetails.Data[0].Timestamp))
 
 			// Convert to unixNanotime for influxDB
 			unixNanoTime := veConsumptionDetails.Data[k].Timestamp.UnixNano()
@@ -191,7 +210,7 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 			// write line protocol
 			lineProtocol := "Reading,meter=" + endpoint + " kwh=" + fmt.Sprint(veConsumptionDetails.Data[k].Kwh) + " " + fmt.Sprint(unixNanoTime)
 			fmt.Println("lineProtocol: ", lineProtocol)
-			// fmt.Println(lineProtocol)
+
 			writeAPI.WriteRecord(lineProtocol)
 			// Flush writes
 			writeAPI.Flush()
@@ -205,13 +224,10 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 	return nil
 }
 
+// Get Token
 func getToken() (authorisation, error) {
 	// Create authorisationContent obj of type authorisation struct
 	var authorisationContent authorisation
-
-	// Pull glow username and password from environment variables
-	// glowUsername := getEnvVar("glowUsername")
-	// glowPassword := getEnvVar("glowPassword")
 
 	// Construct JSON to send to glowmarkt api auth
 	var jsonData = []byte(`{
