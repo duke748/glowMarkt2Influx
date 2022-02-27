@@ -97,36 +97,11 @@ func main() {
 
 	r.POST("/catchup", postCatchup)
 	r.GET("/catchup", getCatchup)
+	r.POST("/metrics", returnMetricsData)
 
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 
-	// Grab the current time to nearest 30 minutes of data that will be available
-	timeTo := getTimeToNearest30()
-
-	// Grab todays date range
-	dateStart := time.Now().Format("2006-01-02") + "T00:00:00"
-	dateEnd := time.Now().Format("2006-01-02") + timeTo
-
-	// Yesterdays date range
-	yesterdayDateStart := time.Now().AddDate(0, 0, -1).Format("2006-01-02") + "T00:00:00"
-	yesterdayDateEnd := time.Now().AddDate(0, 0, -1).Format("2006-01-02") + "T23:59:59"
-
-	fmt.Println("dateStart: ", dateStart)
-	fmt.Println("dateEnd: ", dateEnd)
-	fmt.Println("yesterdayDateStart: ", yesterdayDateStart)
-	fmt.Println("yesterdayDateEnd: ", yesterdayDateEnd)
-
-	// Yesterdays data
-	// getMeterReadings(electricityConsumptionId, "PT30M&function=sum&from="+yesterdayDateStart+"&to="+yesterdayDateEnd, "Electricity")
-	// getMeterReadings(gasConsumptionId, "PT30M&function=sum&from="+yesterdayDateStart+"&to="+yesterdayDateEnd, "Gas")
-
-	// getLast30days()
-
-	catchupRequired = true
-	// Todays data
-	getMeterReadings(electricityConsumptionId, "PT30M&function=sum&from="+dateStart+"&to="+dateEnd, "Electricity", catchupRequired)
-	getMeterReadings(gasConsumptionId, "PT30M&function=sum&from="+dateStart+"&to="+dateEnd, "Gas", catchupRequired)
-
+	
 }
 
 func (r *vEConsumptionDataSlice) UnmarshalJSON(b []byte) error {

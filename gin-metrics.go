@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +23,7 @@ func returnMetricsData(c *gin.Context) {
 	// fmt.Println(body)
 
 	days := body.NumberOfDays
-	c.JSON(http.StatusAccepted, gin.H{"message": "Accepted. Retrieving data")})
+	c.JSON(http.StatusAccepted, gin.H{"message": "Accepted. Retrieving data"})
 
 	for i := -1; i > -days; i-- {
 		fmt.Println(i)
