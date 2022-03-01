@@ -116,4 +116,9 @@ func setRequiredEnvironmentVariables() {
 	influxDbUrl = getEnvVar("influxDbUrl")
 	influxDbOrg = getEnvVar("influxDbOrg")
 	influxDbBucket = getEnvVar("influxDbBucket")
+
+	defaultInterval, _ = strconv.Atoi(os.Getenv("defaultInterval"))
+	if defaultInterval == 0 {
+		defaultInterval = 30
+	}
 }
