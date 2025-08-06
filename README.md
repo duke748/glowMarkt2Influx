@@ -9,6 +9,32 @@ https://play.google.com/store/apps/details?id=uk.co.hildebrand.brightionic&hl=en
 ## IOS App
 https://apps.apple.com/gb/app/bright/id1369989022
 
+## Required Environment Variables
+
+The following environment variables must be configured before running the application:
+
+### GlowMarkt API Configuration
+- **`glowUsername`** - Your GlowMarkt/Bright app username
+  - *Required for authentication with the GlowMarkt API to access your smart meter data*
+- **`glowPassword`** - Your GlowMarkt/Bright app password  
+  - *Required for authentication with the GlowMarkt API to access your smart meter data*
+
+### InfluxDB Configuration
+- **`influxDbToken`** - InfluxDB API token with write permissions
+  - *Required to authenticate and write meter reading data to your InfluxDB instance*
+- **`influxDbUrl`** - Full URL to your InfluxDB instance (including protocol and port)
+  - *Example: `http://localhost:8086` or `https://your-influxdb-server:8086`*
+  - *Required to connect to your InfluxDB database where meter data will be stored*
+- **`influxDbOrg`** - InfluxDB organization name
+  - *Required to specify which InfluxDB organization contains your target bucket*
+- **`influxDbBucket`** - InfluxDB bucket name where data will be stored
+  - *Required to specify the exact bucket where meter readings will be written*
+
+### Optional Configuration
+- **`defaultInterval`** - Polling interval in minutes (default: 30)
+  - *Controls how frequently the application retrieves new meter data from the API*
+  - *Minimum value is 5 minutes - lower intervals may require paid GlowMarkt hardware*
+
 ## Compiling Docker Image
 docker build --tag goglowmarkt .
 

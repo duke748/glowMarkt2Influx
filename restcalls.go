@@ -43,19 +43,24 @@ func getVirtualEntities() error {
 		// Unmarshall into the ves object
 		json.Unmarshal([]byte(bodyString), &ves)
 
-		// Loop of the resources slice and return the Ids
-		for k := range ves[0].Resources {
-			// fmt.Println("name: ", ves[0].Resources[k].Name)
-			switch ves[0].Resources[k].Name {
-			case "gas consumption":
-				gasConsumptionId = ves[0].Resources[k].ResourceID
-			case "gas cost":
-				gasCostId = ves[0].Resources[k].ResourceID
-			case "electricity consumption":
-				electricityConsumptionId = ves[0].Resources[k].ResourceID
-			case "electricity cost":
-				electricityCostId = ves[0].Resources[k].ResourceID
-
+		// Find the virtual entity that has resources
+		for _, ve := range ves {
+			if len(ve.Resources) > 0 {
+				// Loop through the resources slice and return the Ids
+				for _, resource := range ve.Resources {
+					// fmt.Println("name: ", resource.Name)
+					switch resource.Name {
+					case "gas consumption":
+						gasConsumptionId = resource.ResourceID
+					case "gas cost":
+						gasCostId = resource.ResourceID
+					case "electricity consumption":
+						electricityConsumptionId = resource.ResourceID
+					case "electricity cost":
+						electricityCostId = resource.ResourceID
+					}
+				}
+				break // Exit once we find the VE with resources
 			}
 		}
 
@@ -163,7 +168,7 @@ func (r *vEConsumptionDataSlice) UnmarshalJSON(b []byte) error {
 	}
 
 	if len(vals) != 2 {
-		return fmt.Errorf("Expected two values in '%s' but got %s", string(b), string(len(vals)))
+		return fmt.Errorf("Expected two values in '%s' but got %s", string(b), fmt.Sprint(len(vals)))
 	}
 
 	r.Timestamp = time.Unix(int64(vals[0]), 0)

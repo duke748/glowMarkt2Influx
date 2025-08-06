@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -80,7 +81,6 @@ func main() {
 
 }
 
-
 func getMeterReadings(resourceId string, period string, endpoint string, catchup bool) error {
 	checkIfTokenExpired(tokenStruct.Exp)
 
@@ -113,14 +113,25 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 			log.Fatal(err)
 		}
 		bodyString := string(bodyBytes)
+		fmt.Println("API Response Body: ", bodyString) // Debug: Print API response
 
 		// Create a var of veConsumptionDetails details of type veConsumptionData struct
 		var veConsumptionDetails veConsumptionData
 
 		// Unmarshall into the veConsumptionDetails object
-		json.Unmarshal([]byte(bodyString), &veConsumptionDetails)
+		err = json.Unmarshal([]byte(bodyString), &veConsumptionDetails)
+		if err != nil {
+			fmt.Printf("JSON Unmarshal error: %v\n", err)
+			return err
+		}
 
-		fmt.Println(veConsumptionDetails.Status)
+		fmt.Println("Status:", veConsumptionDetails.Status)
+		fmt.Printf("Number of data points received: %d\n", len(veConsumptionDetails.Data))
+
+		if len(veConsumptionDetails.Data) == 0 {
+			fmt.Println("WARNING: No data points received from API")
+			return nil
+		}
 
 		totalKw := 0.0
 
@@ -131,27 +142,51 @@ func getMeterReadings(resourceId string, period string, endpoint string, catchup
 		// always close client at the end
 		defer influxClient.Close()
 
+		// Test InfluxDB connection
+		ctx := context.Background()
+		health, err := influxClient.Health(ctx)
+		if err != nil {
+			fmt.Printf("InfluxDB Health Check Failed: %v\n", err)
+			return err
+		}
+		fmt.Printf("InfluxDB Health Status: %s\n", health.Status)
+
+		// get non-blocking write client outside the loop for better performance
+		writeAPI := influxClient.WriteAPI(influxDbOrg, influxDbBucket)
+
+		// Listen for errors from the write API
+		errorsCh := writeAPI.Errors()
+		go func() {
+			for err := range errorsCh {
+				fmt.Printf("InfluxDB Write Error: %v\n", err)
+			}
+		}()
+
 		for k := range veConsumptionDetails.Data {
 
 			// Convert to unixNanotime for influxDB
 			unixNanoTime := veConsumptionDetails.Data[k].Timestamp.UnixNano()
 
-			fmt.Printf("Time %s Kw Useage %g \n", veConsumptionDetails.Data[k].Timestamp, veConsumptionDetails.Data[k].Kwh)
+			fmt.Printf("Time %s Kw Usage %g \n", veConsumptionDetails.Data[k].Timestamp, veConsumptionDetails.Data[k].Kwh)
 			totalKw += veConsumptionDetails.Data[k].Kwh
-
-			// get non-blocking write client
-			writeAPI := influxClient.WriteAPI("Greenlands", "glowAPI")
 
 			// write line protocol
 			lineProtocol := "Reading,meter=" + endpoint + " kwh=" + fmt.Sprint(veConsumptionDetails.Data[k].Kwh) + " " + fmt.Sprint(unixNanoTime)
-			fmt.Println("lineProtocol: ", lineProtocol)
+			fmt.Println("Writing to InfluxDB - lineProtocol: ", lineProtocol)
 
 			writeAPI.WriteRecord(lineProtocol)
-			// Flush writes
-			writeAPI.Flush()
 
 		}
-		fmt.Printf("Total KW used was  %g \n", totalKw)
+
+		// Flush writes and wait for completion
+		writeAPI.Flush()
+		fmt.Printf("Successfully wrote %d data points to InfluxDB\n", len(veConsumptionDetails.Data))
+		fmt.Printf("Total KW used was %g \n", totalKw)
+	} else {
+		// Handle non-200 status codes
+		bodyBytes, _ := io.ReadAll(response.Body)
+		fmt.Printf("API Error - Status Code: %d, Response: %s\n", response.StatusCode, string(bodyBytes))
+		return fmt.Errorf("API returned status code %d", response.StatusCode)
 	}
 
 	defer response.Body.Close()
