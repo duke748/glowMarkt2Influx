@@ -31,7 +31,7 @@ type veConsumptionData struct {
 	// 	Timestamp time.Time
 	// 	Kwh       float64
 	// } `json:"data"`
-	Data  []vEConsumptionDataSlice `json:"data`
+	Data  []vEConsumptionDataSlice `json:"data"`
 	Name  string                   `json:"name"`
 	Query struct {
 		From     string `json:"from"`

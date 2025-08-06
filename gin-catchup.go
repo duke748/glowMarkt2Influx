@@ -10,10 +10,10 @@ import (
 
 type catchupStruct struct {
 	// json tag to serialize json body
-	SetCatchup bool `json:setCatchup`
+	SetCatchup bool `json:"setCatchup"`
 }
 
-func endpointTest(c gin.Context) {
+func endpointTest(c *gin.Context) {
 	body := catchupStruct{}
 	// using BindJson method to serialize body with struct
 	if err := c.BindJSON(&body); err != nil {
